@@ -245,6 +245,21 @@ class MyServer(BaseHTTPRequestHandler):
                     print (colored("[!] Exiting..\n", "red"))
                     exit(0)
 
+            elif self.path.lower() == "/robots.txt":
+                try:
+                    with open("robots.txt", "rb") as f:
+                        content = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain")
+                    self.send_header("Content-Length", len(content))
+                    self.end_headers()
+                    self.wfile.write(content)
+                except:
+                    self.send_response(404)
+                    self.send_header("Content-Type", "text/plain")
+                    self.end_headers()
+                    self.wfile.write(b"robots.txt not found")
+
             else:
                 itworks_message = "<html><body><h1>It works!</h1><p>This is the default web page for this server.<p></body></html>"
                 self.send_response(200)
